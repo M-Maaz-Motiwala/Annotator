@@ -7,7 +7,7 @@ This setup is split into two parts:
 
 ## 1) GPU Machine Setup
 
-### Recommended: Docker (send `gpu_service/` to CTO)
+### Recommended: Docker (`gpu_service/`)
 
 See **`gpu_service/DOCKER.md`** for full steps. Summary:
 
