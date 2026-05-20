@@ -1,12 +1,19 @@
-import json
 import os
 import tempfile
+from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from faster_whisper import WhisperModel
 from pyannote.audio import Pipeline
+
+from transcription_utils import (
+    attach_speakers_to_segments,
+    build_transcript_response,
+    diarization_turns_from_annotation,
+    segments_to_dict,
+)
 
 
 MODEL_SIZE = os.getenv("WHISPER_MODEL_SIZE", "large-v3")
@@ -14,65 +21,51 @@ DEVICE = os.getenv("WHISPER_DEVICE", "cuda")
 COMPUTE_TYPE = os.getenv("WHISPER_COMPUTE_TYPE", "float16")
 HF_TOKEN = os.getenv("HUGGINGFACE_TOKEN")
 DIARIZATION_MODEL = os.getenv("DIARIZATION_MODEL", "pyannote/speaker-diarization-3.1")
+SKIP_MODEL_LOAD = os.getenv("SKIP_MODEL_LOAD") == "1"
 
-app = FastAPI(title="Sales Call Transcription API", version="1.0.0")
-
-whisper_model = WhisperModel(MODEL_SIZE, device=DEVICE, compute_type=COMPUTE_TYPE)
-if HF_TOKEN:
-    try:
-        diarization_pipeline = Pipeline.from_pretrained(DIARIZATION_MODEL, token=HF_TOKEN)
-    except TypeError:
-        diarization_pipeline = Pipeline.from_pretrained(
-            DIARIZATION_MODEL, use_auth_token=HF_TOKEN
-        )
-else:
-    diarization_pipeline = None
+whisper_model: Optional[WhisperModel] = None
+diarization_pipeline: Optional[Pipeline] = None
 
 
-def _segments_to_dict(segments: Any) -> List[Dict[str, Any]]:
-    out: List[Dict[str, Any]] = []
-    for segment in segments:
-        out.append(
-            {
-                "start": round(segment.start, 3),
-                "end": round(segment.end, 3),
-                "text": segment.text.strip(),
-            }
-        )
-    return out
+def ensure_models_loaded() -> None:
+    global whisper_model, diarization_pipeline
+    if SKIP_MODEL_LOAD or whisper_model is not None:
+        return
+
+    whisper_model = WhisperModel(MODEL_SIZE, device=DEVICE, compute_type=COMPUTE_TYPE)
+    if HF_TOKEN:
+        try:
+            diarization_pipeline = Pipeline.from_pretrained(DIARIZATION_MODEL, token=HF_TOKEN)
+        except TypeError:
+            diarization_pipeline = Pipeline.from_pretrained(
+                DIARIZATION_MODEL, use_auth_token=HF_TOKEN
+            )
 
 
 def _diarize_file(audio_path: str) -> List[Dict[str, Any]]:
     if diarization_pipeline is None:
         return []
-
     diarization = diarization_pipeline(audio_path)
-    turns: List[Dict[str, Any]] = []
-    for turn, _, speaker in diarization.itertracks(yield_label=True):
-        turns.append(
-            {
-                "start": round(turn.start, 3),
-                "end": round(turn.end, 3),
-                "speaker": speaker,
-            }
-        )
-    return turns
+    return diarization_turns_from_annotation(diarization)
 
 
-def _best_speaker_for_segment(start: float, end: float, turns: List[Dict[str, Any]]) -> str:
-    best_speaker = "UNKNOWN"
-    best_overlap = 0.0
-    for turn in turns:
-        overlap = max(0.0, min(end, turn["end"]) - max(start, turn["start"]))
-        if overlap > best_overlap:
-            best_overlap = overlap
-            best_speaker = turn["speaker"]
-    return best_speaker
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    ensure_models_loaded()
+    yield
+
+
+app = FastAPI(title="Sales Call Transcription API", version="1.0.0", lifespan=lifespan)
 
 
 @app.get("/health")
 def health() -> Dict[str, Any]:
-    return {"status": "ok", "diarization_enabled": diarization_pipeline is not None}
+    return {
+        "status": "ok",
+        "models_loaded": whisper_model is not None,
+        "diarization_enabled": diarization_pipeline is not None,
+        "diarization_configured": bool(HF_TOKEN),
+    }
 
 
 @app.post("/transcribe")
@@ -81,6 +74,10 @@ async def transcribe(
     call_id: str = Form(...),
     language: str = Form("en"),
 ) -> Dict[str, Any]:
+    ensure_models_loaded()
+    if whisper_model is None:
+        raise HTTPException(status_code=503, detail="Models are not loaded")
+
     suffix = Path(file.filename or "audio.wav").suffix or ".wav"
 
     with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
@@ -95,28 +92,21 @@ async def transcribe(
             vad_filter=True,
             beam_size=5,
         )
-        whisper_segments = _segments_to_dict(segments)
+        whisper_segments = segments_to_dict(segments)
         diarization_turns = _diarize_file(tmp_path)
+        attach_speakers_to_segments(whisper_segments, diarization_turns)
 
-        for segment in whisper_segments:
-            segment["speaker"] = _best_speaker_for_segment(
-                segment["start"], segment["end"], diarization_turns
-            )
-
-        transcript_text = " ".join([s["text"] for s in whisper_segments if s["text"]])
-        speakers = sorted({turn["speaker"] for turn in diarization_turns}) if diarization_turns else []
-
-        return {
-            "call_id": call_id,
-            "language": info.language,
-            "duration_seconds": round(info.duration, 3),
-            "source_filename": file.filename,
-            "diarization_enabled": diarization_pipeline is not None,
-            "speakers": speakers,
-            "segments": whisper_segments,
-            "diarization_turns": diarization_turns,
-            "full_text": transcript_text,
-        }
+        return build_transcript_response(
+            call_id=call_id,
+            language=info.language,
+            duration_seconds=info.duration,
+            source_filename=file.filename,
+            diarization_enabled=diarization_pipeline is not None,
+            whisper_segments=whisper_segments,
+            diarization_turns=diarization_turns,
+        )
+    except HTTPException:
+        raise
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Transcription failed: {exc}") from exc
     finally:

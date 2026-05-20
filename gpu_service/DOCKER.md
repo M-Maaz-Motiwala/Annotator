@@ -80,6 +80,24 @@ Then rebuild:
 docker compose up -d --build
 ```
 
+## Run tests (verify container / API wiring)
+
+Unit tests mock Whisper/Pyannote (no model download):
+
+```bash
+cd gpu_service
+docker compose run --rm -e SKIP_MODEL_LOAD=1 --entrypoint bash transcription-api \
+  -c "pip install -q pytest httpx && pytest"
+```
+
+After the service is up, optional live check:
+
+```bash
+export GPU_API_URL=http://localhost:8000
+docker compose run --rm -e GPU_API_URL --entrypoint bash transcription-api \
+  -c "pip install -q pytest httpx requests && pytest -m integration"
+```
+
 ## Troubleshooting
 
 | Issue | Fix |

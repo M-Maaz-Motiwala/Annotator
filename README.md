@@ -83,6 +83,61 @@ python laptop_client\process_batch.py `
 
 Run step 3 repeatedly for next batches until pending calls are done.
 
+## Verify setup (tests)
+
+### Laptop (run on your machine — no GPU needed)
+
+```powershell
+cd laptop_client
+.\run_tests.ps1
+```
+
+Or:
+
+```powershell
+cd laptop_client
+pip install -r requirements-test.txt
+pytest
+```
+
+### GPU service (unit tests — mocks models, no CUDA download)
+
+On the GPU server (or inside the built Docker image with test deps):
+
+```bash
+cd gpu_service
+export SKIP_MODEL_LOAD=1
+pip install -r requirements-test.txt   # needs same env as API (torch, faster-whisper, …)
+pytest
+```
+
+Quick check of pure helper logic only (no FastAPI/torch):
+
+```bash
+cd gpu_service
+pip install -r requirements-test-minimal.txt
+pytest tests/test_transcription_utils.py
+```
+
+Or in Docker after the API image is built:
+
+```bash
+cd gpu_service
+docker compose run --rm -e SKIP_MODEL_LOAD=1 --entrypoint bash transcription-api \
+  -c "pip install -q pytest httpx && pytest"
+```
+
+### End-to-end API check (optional, both sides)
+
+After the GPU API is running:
+
+```powershell
+# PowerShell
+$env:GPU_API_URL = "http://<GPU_IP>:8000"
+cd laptop_client; pytest -m integration
+cd ..\gpu_service; pytest -m integration
+```
+
 ## Output Folder Structure
 
 For each call:
