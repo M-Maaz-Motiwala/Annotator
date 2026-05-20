@@ -80,22 +80,13 @@ Then rebuild:
 docker compose up -d --build
 ```
 
-## Run tests (verify container / API wiring)
+## Verify API
 
-Unit tests mock Whisper/Pyannote (no model download):
-
-```bash
-cd gpu_service
-docker compose run --rm -e SKIP_MODEL_LOAD=1 --entrypoint bash transcription-api \
-  -c "pip install -q pytest httpx && pytest"
-```
-
-After the service is up, optional live check:
+After the container is running:
 
 ```bash
-export GPU_API_URL=http://localhost:8000
-docker compose run --rm -e GPU_API_URL --entrypoint bash transcription-api \
-  -c "pip install -q pytest httpx requests && pytest -m integration"
+pip install requests   # if needed on the machine running the check
+python verify_setup.py --api-url http://localhost:8000
 ```
 
 ## Troubleshooting
@@ -115,3 +106,4 @@ docker compose run --rm -e GPU_API_URL --entrypoint bash transcription-api \
 | `docker-compose.yml` | One-command run with GPU + model cache volume |
 | `.env.example` | Config template |
 | `app.py` | FastAPI Whisper + Pyannote service |
+| `verify_setup.py` | Quick `/health` + `/transcribe` check |

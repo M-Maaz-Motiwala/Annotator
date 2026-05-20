@@ -21,15 +21,13 @@ DEVICE = os.getenv("WHISPER_DEVICE", "cuda")
 COMPUTE_TYPE = os.getenv("WHISPER_COMPUTE_TYPE", "float16")
 HF_TOKEN = os.getenv("HUGGINGFACE_TOKEN")
 DIARIZATION_MODEL = os.getenv("DIARIZATION_MODEL", "pyannote/speaker-diarization-3.1")
-SKIP_MODEL_LOAD = os.getenv("SKIP_MODEL_LOAD") == "1"
-
 whisper_model: Optional[WhisperModel] = None
 diarization_pipeline: Optional[Pipeline] = None
 
 
 def ensure_models_loaded() -> None:
     global whisper_model, diarization_pipeline
-    if SKIP_MODEL_LOAD or whisper_model is not None:
+    if whisper_model is not None:
         return
 
     whisper_model = WhisperModel(MODEL_SIZE, device=DEVICE, compute_type=COMPUTE_TYPE)
