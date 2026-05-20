@@ -1,0 +1,25 @@
+services:
+  transcription-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: sales-transcription-api:latest
+    container_name: sales-transcription-api
+    ports:
+      - "${PORT:-8000}:8000"
+    env_file:
+      - .env
+    environment:
+      - WHISPER_MODEL_SIZE=${WHISPER_MODEL_SIZE:-large-v3}
+      - WHISPER_DEVICE=${WHISPER_DEVICE:-cuda}
+      - WHISPER_COMPUTE_TYPE=${WHISPER_COMPUTE_TYPE:-float16}
+      - HUGGINGFACE_TOKEN=${HUGGINGFACE_TOKEN}
+      - DIARIZATION_MODEL=${DIARIZATION_MODEL:-pyannote/speaker-diarization-3.1}
+    volumes:
+      # Persist downloaded Whisper + Pyannote weights between restarts
+      - hf_cache:/root/.cache/huggingface
+    gpus: all
+    restart: unless-stopped
+
+volumes:
+  hf_cache:
