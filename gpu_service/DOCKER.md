@@ -96,6 +96,7 @@ python verify_setup.py --api-url http://localhost:8000
 | `could not select device driver` | Install NVIDIA Container Toolkit, restart Docker |
 | `CUDA out of memory` | Use smaller `WHISPER_MODEL_SIZE` or `WHISPER_COMPUTE_TYPE=int8_float16` |
 | Pyannote 401 / gated model | Set token in `.env`, accept HF model terms |
+| `torchvision` / `extension` AttributeError on start | Rebuild after pulling latest `requirements-docker.txt` (pins torchvision to match base image). If you change the `FROM pytorch/...` tag, update the `torchvision` / `torchaudio` pins in that file too. |
 | Slow first request | Normal — models load on container start |
 
 ## Files in this package

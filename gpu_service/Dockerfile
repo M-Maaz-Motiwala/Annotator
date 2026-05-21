@@ -1,5 +1,5 @@
-# CUDA + PyTorch runtime (CTO server needs NVIDIA Container Toolkit)
-FROM pytorch/pytorch:2.4.0-cuda12.1-cudnn9-runtime
+# CUDA + PyTorch runtime (needs NVIDIA Container Toolkit)
+FROM pytorch/pytorch:2.2.2-cuda12.1-cudnn8-runtime
 
 ENV PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
@@ -16,7 +16,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements-docker.txt .
-RUN pip install --upgrade pip && pip install -r requirements-docker.txt
+# Install torchvision/torchaudio first so pyannote/lightning do not pull incompatible wheels
+RUN pip install --upgrade pip \
+    && pip install -r requirements-docker.txt
 
 COPY app.py transcription_utils.py ./
 

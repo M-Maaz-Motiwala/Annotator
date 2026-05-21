@@ -1,6 +1,15 @@
-# Torch comes from the PyTorch CUDA base image — do not pin torch here.
+# Versions must match the PyTorch in the base image (see Dockerfile FROM line).
+# pytorch:2.2.2 -> torchvision 0.17.2, torchaudio 2.2.2
+# pytorch:2.4.0 -> torchvision 0.19.0, torchaudio 2.4.0
+torchvision==0.17.2
+torchaudio==2.2.2
+
 fastapi>=0.110.0
 uvicorn[standard]>=0.27.0
 python-multipart>=0.0.9
 faster-whisper>=1.0.0
-pyannote.audio>=3.1.0
+
+# Pinned stack for pyannote (avoids broken torchvision/lightning pulls)
+pyannote.audio==3.1.1
+lightning==2.4.0
+torchmetrics==1.4.2

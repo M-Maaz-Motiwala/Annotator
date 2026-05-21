@@ -6,7 +6,6 @@ from typing import Any, Dict, List, Optional
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from faster_whisper import WhisperModel
-from pyannote.audio import Pipeline
 
 from transcription_utils import (
     attach_speakers_to_segments,
@@ -22,7 +21,7 @@ COMPUTE_TYPE = os.getenv("WHISPER_COMPUTE_TYPE", "float16")
 HF_TOKEN = os.getenv("HUGGINGFACE_TOKEN")
 DIARIZATION_MODEL = os.getenv("DIARIZATION_MODEL", "pyannote/speaker-diarization-3.1")
 whisper_model: Optional[WhisperModel] = None
-diarization_pipeline: Optional[Pipeline] = None
+diarization_pipeline: Optional[Any] = None
 
 
 def ensure_models_loaded() -> None:
@@ -32,6 +31,8 @@ def ensure_models_loaded() -> None:
 
     whisper_model = WhisperModel(MODEL_SIZE, device=DEVICE, compute_type=COMPUTE_TYPE)
     if HF_TOKEN:
+        from pyannote.audio import Pipeline
+
         try:
             diarization_pipeline = Pipeline.from_pretrained(DIARIZATION_MODEL, token=HF_TOKEN)
         except TypeError:
