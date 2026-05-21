@@ -60,7 +60,7 @@ http://<GPU_SERVER_IP>:8000
 Example from your laptop:
 
 ```powershell
-python laptop_client\check_api.py --api-url "http://10.0.0.50:8000"
+python laptop_client\verify_setup.py --api-url "http://10.0.0.50:8000"
 ```
 
 Open firewall port **8000** on the GPU server if the laptop is on another machine.
